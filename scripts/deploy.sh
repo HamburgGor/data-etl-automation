@@ -4,10 +4,11 @@
 # Features:
 #   - systemd service with auto-restart
 #   - cron health check (NO server reboot)
-#   - data lifecycle demo: generation + cleanup every 2 min
+#   - data lifecycle demo: generation + cleanup every 1 min
 #   - auto install dependencies (python3, pandas, openpyxl)
 #   - clean obsolete services
 #   - support for multiple Python scripts
+#   - logs kept inside project directory
 # ==============================================
 set -euo pipefail
 
@@ -35,7 +36,7 @@ fi
 USER_HOME="/home/${RUN_USER}"
 PROJECT_DIR="${USER_HOME}/data-etl-automation"
 VENV_DIR="${USER_HOME}/Myvenv"
-LOG_DIR="${USER_HOME}/logs"
+LOG_DIR="${PROJECT_DIR}/logs"          # logs inside the project
 SERVICE_PREFIX="etl_auto"
 SYSTEMD_DIR="/etc/systemd/system"
 PYTHON_BIN="${VENV_DIR}/bin/python3"
@@ -47,17 +48,13 @@ PYTHON_SCRIPTS=("${PROJECT_DIR}/main.py")
 
 # ===================== Step 0: Clean previous deployment =====================
 log "Cleaning up previous deployment (if any)..."
-# Stop & remove existing services that match our prefix
 for svc in $(systemctl list-unit-files --no-legend | grep "^${SERVICE_PREFIX}_" | awk '{print $1}'); do
     systemctl stop "${svc}" 2>/dev/null || true
     systemctl disable "${svc}" 2>/dev/null || true
     rm -f "${SYSTEMD_DIR}/${svc}"
 done
-# Remove old start scripts
 rm -f "${USER_HOME}/start_"*.sh
-# Remove old project-specific cron files
 rm -f /etc/cron.d/etl_check_* /etc/cron.d/etl_data_lifecycle 2>/dev/null || true
-# Clean root's crontab from periodic reboot entries
 crontab -l 2>/dev/null | grep -v "Periodic reboot" | crontab - 2>/dev/null || true
 log "Cleanup completed"
 
@@ -92,12 +89,18 @@ for dep in "${PY_DEPENDENCIES[@]}"; do
 done
 info "All Python dependencies check completed"
 
-# ===================== Step 4: Create directories =====================
+# ===================== Step 4: Create directories & reset logs =====================
 log "Initialize directory structure"
 mkdir -p "${LOG_DIR}" || error "Failed to create log directory"
 mkdir -p "${PROJECT_DIR}/demo_data" "${PROJECT_DIR}/output" || error "Failed to create project subdirectories"
-chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}" "${LOG_DIR}"
+chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}"
 chmod -R 755 "${PROJECT_DIR}"
+
+# Reset demo logs for a clean observation every deployment
+> "${LOG_DIR}/gen.log"
+> "${LOG_DIR}/cleanup.log"
+> "${LOG_DIR}/main_run.log"
+log "Cleared previous demo logs"
 
 # Verify Python interpreter
 if [ ! -x "${PYTHON_BIN}" ]; then
@@ -106,7 +109,7 @@ fi
 python_version=$("${PYTHON_BIN}" --version 2>&1)
 log "Python version: ${python_version}"
 
-# Global deploy log
+# Global deploy log (this one can be appended)
 TOTAL_LOG="${LOG_DIR}/etl_deploy_update.log"
 > "${TOTAL_LOG}"
 log "Start ETL service deploy / update process" | tee -a "${TOTAL_LOG}"
@@ -153,7 +156,6 @@ for script_path in "${PYTHON_SCRIPTS[@]}"; do
         error "Python script not found: ${script_path}" | tee -a "${TOTAL_LOG}"
     fi
 
-    # Generate start script
     cat > "${start_script}" << EOF
 #!/bin/bash
 set -euo pipefail
@@ -180,7 +182,6 @@ EOF
     chmod +x "${start_script}"
     chown "${RUN_USER}:${RUN_USER}" "${start_script}"
 
-    # Generate systemd service file
     cat > "${service_file}" << EOF
 [Unit]
 Description=Data ETL Auto Service - ${script_name}
@@ -224,16 +225,16 @@ EOF
 chmod 644 "/etc/cron.d/etl_check_${etl_service_name}"
 log "Registered health check cron for ${etl_service_name}"
 
-# Data generation & cleanup (every 2 minutes)
+# Data generation & cleanup (every 1 minute)
 cat > /etc/cron.d/etl_data_lifecycle << EOF
 * * * * * ${RUN_USER} cd ${PROJECT_DIR} && ${PYTHON_BIN} gen_test_data.py >> ${LOG_DIR}/gen.log 2>&1
 * * * * * root cd ${PROJECT_DIR} && /bin/bash scripts/cleanup_old.sh >> ${LOG_DIR}/cleanup.log 2>&1
 EOF
 chmod 644 /etc/cron.d/etl_data_lifecycle
-log "Registered data generation & cleanup cron (every 2 min)"
+log "Registered data generation & cleanup cron (every minute)"
 
 # ===================== Step 8: Final permissions fix =====================
-chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}" "${LOG_DIR}"
+chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}"
 
 # ===================== Final Status =====================
 info "===== Deploy process finished, current service status =====" | tee -a "${TOTAL_LOG}"
@@ -244,7 +245,7 @@ done
 
 info "Schedule summary:" | tee -a "${TOTAL_LOG}"
 info "1. Service monitor: 07:50 / 19:50 every day, auto restart if down" | tee -a "${TOTAL_LOG}"
-info "2. Data lifecycle: new CSV every 2 min, cleanup files older than 5 virtual days" | tee -a "${TOTAL_LOG}"
+info "2. Data lifecycle: new CSV every minute, cleanup files older than 5 virtual days" | tee -a "${TOTAL_LOG}"
 info "3. Service restart policy: retry per 60s, max 6 times in 1 hour" | tee -a "${TOTAL_LOG}"
 info "4. ETL service enabled auto start after system reboot" | tee -a "${TOTAL_LOG}"
 log "ETL deploy / update process done!"
