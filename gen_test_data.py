@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-Scheduled data generation script (invoked by cron every 2 minutes).
-Generates a 500k-row CSV for the next day after the latest existing file.
+Scheduled data generation script (invoked by cron every minute, or manually).
+Logic: generates the next day's CSV after the latest existing date-stamped file.
 If no file exists, starts from today.
+Optimized: progress bar updates by time (0.15 sec) when running in terminal;
+           silent output when redirected (e.g., cron) to keep logs clean.
 """
 import os
 import re
+import sys
+import time
 import random
 import pandas as pd
 from datetime import datetime, timedelta
@@ -14,6 +18,7 @@ from core.color_print import print_single_line_progress, finish_progress_line, p
 TOTAL_ROWS = 500000
 DATA_DIR = "./demo_data"
 FILE_PATTERN = re.compile(r"^large_input_(\d{8})\.csv$")
+PROGRESS_INTERVAL_SEC = 0.15    # refresh progress at most every 0.15 seconds
 
 def get_latest_date():
     """Return the latest date string YYYYMMDD from existing files, or None."""
@@ -43,7 +48,10 @@ def generate_file(date_str: str):
     file_path = os.path.join(DATA_DIR, f"large_input_{date_str}.csv")
     print_green(f"Generating {TOTAL_ROWS:,} rows for virtual date {date_str}...")
 
+    is_terminal = sys.stdout.isatty()   # True when run manually, False when piped/cron
+
     rows = []
+    last_update = 0.0
     for idx in range(1, TOTAL_ROWS + 1):
         r = random.random()
         if r < 0.02:
@@ -59,9 +67,17 @@ def generate_file(date_str: str):
             row = {"id": idx, "amount": round(random.uniform(0.01, 99999.99), 2),
                    "category": random.choice(["A", "B", "C", "D", "E"])}
         rows.append(row)
-        print_single_line_progress(idx, TOTAL_ROWS)
 
-    finish_progress_line()
+        # Update progress bar based on time, only when stdout is a terminal
+        if is_terminal:
+            now = time.time()
+            if now - last_update >= PROGRESS_INTERVAL_SEC or idx == TOTAL_ROWS:
+                print_single_line_progress(idx, TOTAL_ROWS)
+                last_update = now
+
+    if is_terminal:
+        finish_progress_line()
+
     os.makedirs(DATA_DIR, exist_ok=True)
     df = pd.DataFrame(rows)
     df.to_csv(file_path, index=False, encoding="utf-8-sig")
