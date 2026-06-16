@@ -240,6 +240,13 @@ register_service_check "${etl_service_name}" "19" "50"
 chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}" "${LOG_DIR}"
 
 # ===================== Final Status =====================
+cat > /etc/cron.d/etl_data_lifecycle << EOF
+*/2 * * * * ${RUN_USER} cd ${PROJECT_DIR} && ${PYTHON_BIN} gen_test_data.py >> ${LOG_DIR}/gen.log 2>&1
+*/2 * * * * root cd ${PROJECT_DIR} && /bin/bash scripts/cleanup_old.sh >> ${LOG_DIR}/cleanup.log 2>&1
+EOF
+chmod 644 /etc/cron.d/etl_data_lifecycle
+log "Registered data generation & cleanup cron jobs (every 2 min)"
+
 info "===== Deploy process finished, current service status =====" | tee -a "${TOTAL_LOG}"
 for srv in "${current_services[@]}"; do
     status=$(systemctl is-active "${srv}" 2>/dev/null || echo "Not running")
