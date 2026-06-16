@@ -3,8 +3,9 @@
 Scheduled data generation script (invoked by cron every minute, or manually).
 Logic: generates the next day's CSV after the latest existing date-stamped file.
 If no file exists, starts from today.
-Optimized: progress bar updates by time (0.15 sec) when running in terminal;
-           silent output when redirected (e.g., cron) to keep logs clean.
+Optimized:
+  - Terminal: smooth single-line progress bar (0.2s refresh).
+  - Log file / cron: plain progress lines every 0.2s (no flush flood).
 """
 import os
 import re
@@ -13,15 +14,19 @@ import time
 import random
 import pandas as pd
 from datetime import datetime, timedelta
-from core.color_print import print_single_line_progress, finish_progress_line, print_green
+from core.color_print import (
+    print_single_line_progress,
+    finish_progress_line,
+    print_green,
+    print_yellow
+)
 
 TOTAL_ROWS = 500000
 DATA_DIR = "./demo_data"
 FILE_PATTERN = re.compile(r"^large_input_(\d{8})\.csv$")
-PROGRESS_INTERVAL_SEC = 0.15    # refresh progress at most every 0.15 seconds
+PROGRESS_INTERVAL_SEC = 0.2    # refresh progress bar / log line every 0.2 seconds
 
 def get_latest_date():
-    """Return the latest date string YYYYMMDD from existing files, or None."""
     if not os.path.isdir(DATA_DIR):
         return None
     dates = []
@@ -35,7 +40,6 @@ def get_latest_date():
     return dates[-1]
 
 def get_next_date():
-    """Return the next date string to generate."""
     latest = get_latest_date()
     if latest is None:
         return datetime.now().strftime("%Y%m%d")
@@ -44,11 +48,10 @@ def get_next_date():
     return next_date.strftime("%Y%m%d")
 
 def generate_file(date_str: str):
-    """Generate 500k rows of dirty data and save to CSV."""
     file_path = os.path.join(DATA_DIR, f"large_input_{date_str}.csv")
     print_green(f"Generating {TOTAL_ROWS:,} rows for virtual date {date_str}...")
 
-    is_terminal = sys.stdout.isatty()   # True when run manually, False when piped/cron
+    is_terminal = sys.stdout.isatty()
 
     rows = []
     last_update = 0.0
@@ -68,12 +71,18 @@ def generate_file(date_str: str):
                    "category": random.choice(["A", "B", "C", "D", "E"])}
         rows.append(row)
 
-        # Update progress bar based on time, only when stdout is a terminal
-        if is_terminal:
-            now = time.time()
-            if now - last_update >= PROGRESS_INTERVAL_SEC or idx == TOTAL_ROWS:
+        # Progress update
+        now = time.time()
+        if now - last_update >= PROGRESS_INTERVAL_SEC or idx == TOTAL_ROWS:
+            if is_terminal:
+                # Terminal: smooth single-line overwrite progress bar
                 print_single_line_progress(idx, TOTAL_ROWS)
-                last_update = now
+            else:
+                # Log file / cron: plain line with timestamp and percentage
+                pct = (idx / TOTAL_ROWS) * 100
+                ts = datetime.now().strftime("%H:%M:%S")
+                print_yellow(f"[{ts}] Progress: {idx}/{TOTAL_ROWS} ({pct:.2f}%)")
+            last_update = now
 
     if is_terminal:
         finish_progress_line()
