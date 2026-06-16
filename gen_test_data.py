@@ -5,7 +5,7 @@ Logic: generates the next day's CSV after the latest existing date-stamped file.
 If no file exists, starts from today.
 Optimized:
   - Terminal: smooth single-line progress bar (0.2s refresh).
-  - Log file / cron: plain progress lines every 0.2s (no flush flood).
+  - Log file / cron: progress bar with timestamp every 0.2s (clean and readable).
 """
 import os
 import re
@@ -24,7 +24,8 @@ from core.color_print import (
 TOTAL_ROWS = 500000
 DATA_DIR = "./demo_data"
 FILE_PATTERN = re.compile(r"^large_input_(\d{8})\.csv$")
-PROGRESS_INTERVAL_SEC = 0.2    # refresh progress bar / log line every 0.2 seconds
+PROGRESS_INTERVAL_SEC = 0.2    # refresh progress every 0.2 seconds
+BAR_LENGTH = 40                # length of the progress bar in characters
 
 def get_latest_date():
     if not os.path.isdir(DATA_DIR):
@@ -78,10 +79,12 @@ def generate_file(date_str: str):
                 # Terminal: smooth single-line overwrite progress bar
                 print_single_line_progress(idx, TOTAL_ROWS)
             else:
-                # Log file / cron: plain line with timestamp and percentage
+                # Log file / cron: progress bar with timestamp
                 pct = (idx / TOTAL_ROWS) * 100
+                filled = int(BAR_LENGTH * idx / TOTAL_ROWS)
+                bar = '█' * filled + '░' * (BAR_LENGTH - filled)
                 ts = datetime.now().strftime("%H:%M:%S")
-                print_yellow(f"[{ts}] Progress: {idx}/{TOTAL_ROWS} ({pct:.2f}%)")
+                print_yellow(f"[{ts}] [{bar}] {idx}/{TOTAL_ROWS} ({pct:.2f}%)")
             last_update = now
 
     if is_terminal:
