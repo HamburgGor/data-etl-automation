@@ -1,11 +1,14 @@
 #!/bin/bash
-# Cleanup script: keep only the latest 5 virtual days' files.
+# Cleanup script: deletes virtual date files older than 5 virtual days
 set -euo pipefail
 
+# Robust user detection (works in sudo, cron, and normal shells)
 if [ -n "${SUDO_USER:-}" ]; then
     TARGET_USER="${SUDO_USER}"
-else
+elif [ -n "${USER:-}" ]; then
     TARGET_USER="${USER}"
+else
+    TARGET_USER="$(whoami)"
 fi
 
 DATA_DIR="/home/${TARGET_USER}/data-etl-automation/demo_data"
@@ -18,10 +21,11 @@ data_dir = '${DATA_DIR}'
 pattern = re.compile(r'^large_input_(\d{8})\.csv$')
 
 dates = []
-for f in os.listdir(data_dir):
-    m = pattern.match(f)
-    if m:
-        dates.append(m.group(1))
+if os.path.isdir(data_dir):
+    for f in os.listdir(data_dir):
+        m = pattern.match(f)
+        if m:
+            dates.append(m.group(1))
 
 if not dates:
     exit(0)
