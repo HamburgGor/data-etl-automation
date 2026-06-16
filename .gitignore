@@ -1,0 +1,28 @@
+# Virtual environment
+Myvenv/
+venv/
+.env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+dist/
+build/
+*.egg-info/
+
+# Business outputs
+demo_data/*.csv
+output/*.xlsx
+output/*.csv
+logs/*.log
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Temp files
+*.tmp
