@@ -226,8 +226,8 @@ log "Registered health check cron for ${etl_service_name}"
 
 # Data generation & cleanup (every 2 minutes)
 cat > /etc/cron.d/etl_data_lifecycle << EOF
-*/2 * * * * ${RUN_USER} cd ${PROJECT_DIR} && ${PYTHON_BIN} gen_test_data.py >> ${LOG_DIR}/gen.log 2>&1
-*/2 * * * * root cd ${PROJECT_DIR} && /bin/bash scripts/cleanup_old.sh >> ${LOG_DIR}/cleanup.log 2>&1
+* * * * * ${RUN_USER} cd ${PROJECT_DIR} && ${PYTHON_BIN} gen_test_data.py >> ${LOG_DIR}/gen.log 2>&1
+* * * * * root cd ${PROJECT_DIR} && /bin/bash scripts/cleanup_old.sh >> ${LOG_DIR}/cleanup.log 2>&1
 EOF
 chmod 644 /etc/cron.d/etl_data_lifecycle
 log "Registered data generation & cleanup cron (every 2 min)"
