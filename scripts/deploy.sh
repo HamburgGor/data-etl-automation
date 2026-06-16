@@ -3,13 +3,14 @@
 # ETL Auto Service Deploy & Update Script
 # Features:
 #   - systemd service with auto-restart
-#   - cron health check + server periodic reboot
+#   - cron health check (NO server reboot)
+#   - data lifecycle demo: generation + cleanup every 2 min
 #   - auto install dependencies (python3, pandas, openpyxl)
 #   - clean obsolete services
+#   - support for multiple Python scripts
 # ==============================================
 set -euo pipefail
 
-# Color definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -20,13 +21,11 @@ error()  { echo -e "${RED}[ERROR] $1${NC}"; exit 1; }
 info()   { echo -e "${GREEN}[INFO] $1${NC}"; }
 warn()   { echo -e "${YELLOW}[WARN] $1${NC}"; }
 
-# Check root privilege
 if [ "$(id -u)" -ne 0 ]; then
     error "Please run this script with root privilege (sudo ./deploy.sh)"
 fi
 
 # ===================== Global Config =====================
-# Auto detect real user (ignore root/sudo)
 if [ -n "${SUDO_USER:-}" ]; then
     RUN_USER="${SUDO_USER}"
 else
@@ -42,13 +41,25 @@ SYSTEMD_DIR="/etc/systemd/system"
 PYTHON_BIN="${VENV_DIR}/bin/python3"
 PIP_BIN="${VENV_DIR}/bin/pip"
 
-# System dependencies
 SYS_DEPENDENCIES=("python3" "python3-pip" "python3-venv")
-# Python dependencies (openpyxl added for Excel export)
 PY_DEPENDENCIES=("pandas" "openpyxl")
-
-# Python business scripts list
 PYTHON_SCRIPTS=("${PROJECT_DIR}/main.py")
+
+# ===================== Step 0: Clean previous deployment =====================
+log "Cleaning up previous deployment (if any)..."
+# Stop & remove existing services that match our prefix
+for svc in $(systemctl list-unit-files --no-legend | grep "^${SERVICE_PREFIX}_" | awk '{print $1}'); do
+    systemctl stop "${svc}" 2>/dev/null || true
+    systemctl disable "${svc}" 2>/dev/null || true
+    rm -f "${SYSTEMD_DIR}/${svc}"
+done
+# Remove old start scripts
+rm -f "${USER_HOME}/start_"*.sh
+# Remove old project-specific cron files
+rm -f /etc/cron.d/etl_check_* /etc/cron.d/etl_data_lifecycle 2>/dev/null || true
+# Clean root's crontab from periodic reboot entries
+crontab -l 2>/dev/null | grep -v "Periodic reboot" | crontab - 2>/dev/null || true
+log "Cleanup completed"
 
 # ===================== Step 1: Install system packages =====================
 log "Check & install system runtime packages"
@@ -67,10 +78,8 @@ if [ ! -d "${VENV_DIR}" ]; then
     log "Creating new virtual environment"
     python3 -m venv "${VENV_DIR}"
 fi
-
-# Activate venv and upgrade pip
 source "${VENV_DIR}/bin/activate"
-log "Upgrade pip in virtual environment"
+log "Upgrade pip"
 ${PIP_BIN} install --upgrade pip -qq
 
 # ===================== Step 3: Install Python dependencies =====================
@@ -87,8 +96,6 @@ info "All Python dependencies check completed"
 log "Initialize directory structure"
 mkdir -p "${LOG_DIR}" || error "Failed to create log directory"
 mkdir -p "${PROJECT_DIR}/demo_data" "${PROJECT_DIR}/output" || error "Failed to create project subdirectories"
-
-# Set ownership and permissions
 chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}" "${LOG_DIR}"
 chmod -R 755 "${PROJECT_DIR}"
 
@@ -104,7 +111,7 @@ TOTAL_LOG="${LOG_DIR}/etl_deploy_update.log"
 > "${TOTAL_LOG}"
 log "Start ETL service deploy / update process" | tee -a "${TOTAL_LOG}"
 
-# ===================== Step 5: Clean obsolete services =====================
+# ===================== Step 5: Clean obsolete services (dynamic scan) =====================
 log "Scan existing ETL services"
 deployed_services=()
 for service_file in "${SYSTEMD_DIR}/${SERVICE_PREFIX}_"*.service; do
@@ -114,7 +121,6 @@ for service_file in "${SYSTEMD_DIR}/${SERVICE_PREFIX}_"*.service; do
     fi
 done
 
-# Generate current service list
 current_services=()
 for script_path in "${PYTHON_SCRIPTS[@]}"; do
     script_name=$(basename "${script_path}" .py)
@@ -129,7 +135,6 @@ for deployed_service in "${deployed_services[@]}"; do
         systemctl stop "${deployed_service}" 2>/dev/null || true
         systemctl disable "${deployed_service}" 2>/dev/null || true
         rm -f "${SYSTEMD_DIR}/${deployed_service}.service"
-        # Remove associated start script
         script_name="${deployed_service#${SERVICE_PREFIX}_}"
         rm -f "${USER_HOME}/start_${script_name}.sh"
     fi
@@ -140,7 +145,6 @@ info "===== Step 6: Deploy ETL resident services =====" | tee -a "${TOTAL_LOG}"
 for script_path in "${PYTHON_SCRIPTS[@]}"; do
     script_name=$(basename "${script_path}" .py)
     current_service="${SERVICE_PREFIX}_${script_name}"
-    
     start_script="${USER_HOME}/start_${script_name}.sh"
     log_file="${LOG_DIR}/${script_name}_run.log"
     service_file="${SYSTEMD_DIR}/${current_service}.service"
@@ -161,8 +165,6 @@ PY_BIN="${VENV_DIR}/bin/python3"
 log() {
     echo "[\$(date '+%Y-%m-%d %H:%M:%S')] \$1" >> "\${LOG_FILE}"
 }
-
-# Clear log file each run (optional, remove if you want to append)
 > "\${LOG_FILE}"
 log "ETL startup script running"
 log "Python interpreter: \${PY_BIN}"
@@ -173,8 +175,6 @@ if ! "\${PY_BIN}" -c "import pandas" &>/dev/null; then
     echo -e "${RED}[ERROR] Missing pandas${NC}" >&2
     exit 1
 fi
-
-# Execute the python script, redirect stderr to log
 exec "\${PY_BIN}" "\${PY_SCRIPT}" 2>> "\${LOG_FILE}"
 EOF
     chmod +x "${start_script}"
@@ -202,7 +202,6 @@ TimeoutStartSec=90
 WantedBy=multi-user.target
 EOF
 
-    # Reload systemd and enable/start service
     systemctl daemon-reload
     systemctl enable "${current_service}" || error "Failed to enable ${current_service}"
     systemctl restart "${current_service}" || error "Failed to start ${current_service}"
@@ -214,39 +213,29 @@ EOF
     fi
 done
 
-# ===================== Step 7: Cron tasks (health check + reboot) =====================
-register_service_check() {
-    local service_name=$1
-    local check_hour=$2
-    local check_min=$3
-    local cron_log="${LOG_DIR}/cron_check_${service_name}.log"
-    local cron_file="/etc/cron.d/etl_check_${service_name}"
-    
-    cat > "${cron_file}" << EOF
-${check_min} ${check_hour} * * * root systemctl is-active --quiet ${service_name} || (echo "[\$(date +\%Y-\%m-\%d\ \%H:\%M:\%S)] Service down, restarting" >> ${cron_log}; systemctl start ${service_name} 2>> ${cron_log})
-EOF
-    chmod 644 "${cron_file}"
-    log "Registered health check cron for ${service_name} at ${check_hour}:${check_min}"
-}
+# ===================== Step 7: Cron tasks =====================
+info "===== Step 7: Register cron jobs =====" | tee -a "${TOTAL_LOG}"
 
-
-info "===== Step 7: Register periodic monitor & server reboot =====" | tee -a "${TOTAL_LOG}"
+# Health check (07:50 and 19:50 daily)
 etl_service_name="${SERVICE_PREFIX}_main"
-register_service_check "${etl_service_name}" "07" "50"
-register_service_check "${etl_service_name}" "19" "50"
+cat > "/etc/cron.d/etl_check_${etl_service_name}" << EOF
+50 07,19 * * * root systemctl is-active --quiet ${etl_service_name} || (echo "[\$(date +\%Y-\%m-\%d\ \%H:\%M:\%S)] Service down, restarting" >> ${LOG_DIR}/cron_check_${etl_service_name}.log; systemctl start ${etl_service_name} 2>> ${LOG_DIR}/cron_check_${etl_service_name}.log)
+EOF
+chmod 644 "/etc/cron.d/etl_check_${etl_service_name}"
+log "Registered health check cron for ${etl_service_name}"
 
-
-# ===================== Step 8: Final permissions fix =====================
-chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}" "${LOG_DIR}"
-
-# ===================== Final Status =====================
+# Data generation & cleanup (every 2 minutes)
 cat > /etc/cron.d/etl_data_lifecycle << EOF
 */2 * * * * ${RUN_USER} cd ${PROJECT_DIR} && ${PYTHON_BIN} gen_test_data.py >> ${LOG_DIR}/gen.log 2>&1
 */2 * * * * root cd ${PROJECT_DIR} && /bin/bash scripts/cleanup_old.sh >> ${LOG_DIR}/cleanup.log 2>&1
 EOF
 chmod 644 /etc/cron.d/etl_data_lifecycle
-log "Registered data generation & cleanup cron jobs (every 2 min)"
+log "Registered data generation & cleanup cron (every 2 min)"
 
+# ===================== Step 8: Final permissions fix =====================
+chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}" "${LOG_DIR}"
+
+# ===================== Final Status =====================
 info "===== Deploy process finished, current service status =====" | tee -a "${TOTAL_LOG}"
 for srv in "${current_services[@]}"; do
     status=$(systemctl is-active "${srv}" 2>/dev/null || echo "Not running")
@@ -255,9 +244,7 @@ done
 
 info "Schedule summary:" | tee -a "${TOTAL_LOG}"
 info "1. Service monitor: 07:50 / 19:50 every day, auto restart if down" | tee -a "${TOTAL_LOG}"
-info "2. Server reboot: 07:40 / 19:40 every day" | tee -a "${TOTAL_LOG}"
+info "2. Data lifecycle: new CSV every 2 min, cleanup files older than 5 virtual days" | tee -a "${TOTAL_LOG}"
 info "3. Service restart policy: retry per 60s, max 6 times in 1 hour" | tee -a "${TOTAL_LOG}"
 info "4. ETL service enabled auto start after system reboot" | tee -a "${TOTAL_LOG}"
-info "5. All periodic tasks managed by cron" | tee -a "${TOTAL_LOG}"
-
 log "ETL deploy / update process done!"
