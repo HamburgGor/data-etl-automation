@@ -95,6 +95,10 @@ mkdir -p "${LOG_DIR}" || error "Failed to create log directory"
 mkdir -p "${PROJECT_DIR}/demo_data" "${PROJECT_DIR}/output" || error "Failed to create project subdirectories"
 chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}"
 chmod -R 755 "${PROJECT_DIR}"
+# Ensure log files are writable by the service user
+touch "${LOG_DIR}/main_run.log" "${LOG_DIR}/gen.log" "${LOG_DIR}/cleanup.log"
+chown "${RUN_USER}:${RUN_USER}" "${LOG_DIR}"/*.log
+chmod 644 "${LOG_DIR}"/*.log
 
 # Reset demo logs for a clean observation every deployment
 > "${LOG_DIR}/gen.log"
