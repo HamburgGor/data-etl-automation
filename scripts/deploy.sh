@@ -56,6 +56,11 @@ done
 rm -f "${USER_HOME}/start_"*.sh
 rm -f /etc/cron.d/etl_check_* /etc/cron.d/etl_data_lifecycle 2>/dev/null || true
 crontab -l 2>/dev/null | grep -v "Periodic reboot" | crontab - 2>/dev/null || true
+
+# Reset demo data and output directories for a clean start
+rm -rf "${PROJECT_DIR}/demo_data"/*
+rm -rf "${PROJECT_DIR}/output"/*
+
 log "Cleanup completed"
 
 # ===================== Step 1: Install system packages =====================
