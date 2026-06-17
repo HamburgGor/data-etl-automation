@@ -4,7 +4,7 @@
 # Features:
 #   - systemd service with auto-restart
 #   - cron health check (NO server reboot)
-#   - data lifecycle demo: generation every minute, cleanup with 30s delay
+#   - data lifecycle demo: generation, cleanup, and ETL every minute
 #   - auto install dependencies (python3, pandas, openpyxl)
 #   - clean obsolete services
 #   - support for multiple Python scripts
@@ -96,7 +96,7 @@ mkdir -p "${PROJECT_DIR}/demo_data" "${PROJECT_DIR}/output" || error "Failed to 
 chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}"
 chmod -R 755 "${PROJECT_DIR}"
 # Ensure log files are writable by the service user
-touch "${LOG_DIR}/main_run.log" "${LOG_DIR}/gen.log" "${LOG_DIR}/cleanup.log"
+touch "${LOG_DIR}/main_run.log" "${LOG_DIR}/gen.log" "${LOG_DIR}/cleanup.log" "${LOG_DIR}/main_cron.log"
 chown "${RUN_USER}:${RUN_USER}" "${LOG_DIR}"/*.log
 chmod 644 "${LOG_DIR}"/*.log
 
@@ -104,6 +104,7 @@ chmod 644 "${LOG_DIR}"/*.log
 > "${LOG_DIR}/gen.log"
 > "${LOG_DIR}/cleanup.log"
 > "${LOG_DIR}/main_run.log"
+> "${LOG_DIR}/main_cron.log"
 log "Cleared previous demo logs"
 
 # Verify Python interpreter
@@ -229,13 +230,14 @@ EOF
 chmod 644 "/etc/cron.d/etl_check_${etl_service_name}"
 log "Registered health check cron for ${etl_service_name}"
 
-# Data generation & cleanup (every 1 minute, cleanup delayed 30s to avoid race condition)
+# Data generation, cleanup, and ETL execution (every minute, staggered to avoid conflicts)
 cat > /etc/cron.d/etl_data_lifecycle << EOF
 * * * * * ${RUN_USER} cd ${PROJECT_DIR} && ${PYTHON_BIN} gen_test_data.py >> ${LOG_DIR}/gen.log 2>&1
 * * * * * root cd ${PROJECT_DIR} && sleep 30 && /bin/bash scripts/cleanup_old.sh >> ${LOG_DIR}/cleanup.log 2>&1
+* * * * * ${RUN_USER} cd ${PROJECT_DIR} && sleep 45 && ${PYTHON_BIN} main.py >> ${LOG_DIR}/main_cron.log 2>&1
 EOF
 chmod 644 /etc/cron.d/etl_data_lifecycle
-log "Registered data generation & cleanup cron (every minute, cleanup delayed 30s)"
+log "Registered data generation, cleanup, and ETL cron (every minute, staggered)"
 
 # ===================== Step 8: Final permissions fix =====================
 chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}"
@@ -249,7 +251,7 @@ done
 
 info "Schedule summary:" | tee -a "${TOTAL_LOG}"
 info "1. Service monitor: 07:50 / 19:50 every day, auto restart if down" | tee -a "${TOTAL_LOG}"
-info "2. Data lifecycle: new CSV every minute, cleanup 30s later, keep latest 5 files" | tee -a "${TOTAL_LOG}"
+info "2. Data lifecycle: new CSV every minute, cleanup 30s later, ETL at 45s, keep latest 5 files" | tee -a "${TOTAL_LOG}"
 info "3. Service restart policy: retry per 60s, max 6 times in 1 hour" | tee -a "${TOTAL_LOG}"
 info "4. ETL service enabled auto start after system reboot" | tee -a "${TOTAL_LOG}"
 log "ETL deploy / update process done!"
