@@ -4,7 +4,7 @@
 # Features:
 #   - systemd service with auto-restart
 #   - cron health check (NO server reboot)
-#   - data lifecycle demo: generation + cleanup every 1 min
+#   - data lifecycle demo: generation every minute, cleanup with 30s delay
 #   - auto install dependencies (python3, pandas, openpyxl)
 #   - clean obsolete services
 #   - support for multiple Python scripts
@@ -229,13 +229,13 @@ EOF
 chmod 644 "/etc/cron.d/etl_check_${etl_service_name}"
 log "Registered health check cron for ${etl_service_name}"
 
-# Data generation & cleanup (every 1 minute)
+# Data generation & cleanup (every 1 minute, cleanup delayed 30s to avoid race condition)
 cat > /etc/cron.d/etl_data_lifecycle << EOF
 * * * * * ${RUN_USER} cd ${PROJECT_DIR} && ${PYTHON_BIN} gen_test_data.py >> ${LOG_DIR}/gen.log 2>&1
-* * * * * root cd ${PROJECT_DIR} && /bin/bash scripts/cleanup_old.sh >> ${LOG_DIR}/cleanup.log 2>&1
+* * * * * root cd ${PROJECT_DIR} && sleep 30 && /bin/bash scripts/cleanup_old.sh >> ${LOG_DIR}/cleanup.log 2>&1
 EOF
 chmod 644 /etc/cron.d/etl_data_lifecycle
-log "Registered data generation & cleanup cron (every minute)"
+log "Registered data generation & cleanup cron (every minute, cleanup delayed 30s)"
 
 # ===================== Step 8: Final permissions fix =====================
 chown -R "${RUN_USER}:${RUN_USER}" "${PROJECT_DIR}"
@@ -249,7 +249,7 @@ done
 
 info "Schedule summary:" | tee -a "${TOTAL_LOG}"
 info "1. Service monitor: 07:50 / 19:50 every day, auto restart if down" | tee -a "${TOTAL_LOG}"
-info "2. Data lifecycle: new CSV every minute, cleanup files older than 5 virtual days" | tee -a "${TOTAL_LOG}"
+info "2. Data lifecycle: new CSV every minute, cleanup 30s later, keep latest 5 files" | tee -a "${TOTAL_LOG}"
 info "3. Service restart policy: retry per 60s, max 6 times in 1 hour" | tee -a "${TOTAL_LOG}"
 info "4. ETL service enabled auto start after system reboot" | tee -a "${TOTAL_LOG}"
 log "ETL deploy / update process done!"
