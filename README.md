@@ -23,20 +23,20 @@ data-etl-automation/
 ├── README.md               # 项目说明文档
 ├── requirements.txt        # Python 依赖清单
 ├── main.py                 # ETL 程序主入口
-├── gen\_test\_data.py        # 生成 50 万行测试脏数据（支持定时生成日期文件）
+├── gen\\\_test\\\_data.py        # 生成 50 万行测试脏数据（支持定时生成日期文件）
 ├── core/                   # 公共工具底层（通用能力封装）
-│   ├── \_\_init\_\_.py
-│   ├── color\_print.py      # ANSI 彩色日志 + 可视化进度条
-│   ├── data\_cleaner.py     # 核心数据清洗工具类与方法
-│   └── stable\_retry.py     # 任务重试装饰器（容错机制）
+│   ├── \\\_\\\_init\\\_\\\_.py
+│   ├── color\\\_print.py      # ANSI 彩色日志 + 可视化进度条
+│   ├── data\\\_cleaner.py     # 核心数据清洗工具类与方法
+│   └── stable\\\_retry.py     # 任务重试装饰器（容错机制）
 ├── tasks/                  # 业务逻辑层
-│   ├── \_\_init\_\_.py
-│   └── batch\_task.py       # ETL 批处理核心流程
+│   ├── \\\_\\\_init\\\_\\\_.py
+│   └── batch\\\_task.py       # ETL 批处理核心流程
 ├── scripts/                # 部署与运维脚本
 │   ├── deploy.sh           # 服务器一键部署脚本
-│   └── cleanup\_old.sh      # 过期数据定时清理脚本
+│   └── cleanup\\\_old.sh      # 过期数据定时清理脚本
 └── tests/                  # 测试用例目录（预留）
-    └── \_\_init\_\_.py
+    └── \\\_\\\_init\\\_\\\_.py
 ```
 
 自动生成目录：项目运行后将自动创建 demo\_data/（测试数据）、output/（处理结果）、logs/（运行日志），无需手动新建。
@@ -64,7 +64,7 @@ source Myvenv/bin/activate
 # Windows
 
 ```text
-Myvenv\\Scripts\\activate
+Myvenv\\\\Scripts\\\\activate
 ```
 
 # 安装全部依赖
@@ -78,7 +78,7 @@ pip install -r requirements.txt
 # 生成50万行超大脏数据（用于演示）
 
 ```text
-python gen\_test\_data.py
+python gen\\\_test\\\_data.py
 ```
 
 4. 执行 ETL 数据处理
@@ -86,7 +86,7 @@ python gen\_test\_data.py
 # 自定义输入输出路径运行
 
 ```text
-python main.py --input demo\_data/large\_input.csv --output output/result.xlsx
+python main.py --input demo\\\_data/large\\\_input.csv --output output/result.xlsx
 ```
 
 # 使用默认配置快速运行
@@ -102,13 +102,13 @@ python main.py
 
 ```text
 git clone https://github.com/HamburgGor/data-etl-automation.git
-cd \~/data-etl-automation
+cd \\\~/data-etl-automation
 ```
 
 # 2\. 赋予运维脚本执行权限并启动部署
 
 ```text
-chmod +x scripts/\*.sh
+chmod +x scripts/\\\*.sh
 sudo ./scripts/deploy.sh
 ```
 
@@ -123,18 +123,19 @@ sudo ./scripts/deploy.sh
   * 每日 07:50 / 19:50 巡检服务状态，异常自动拉起
   * 每分钟自动生成下一个虚拟日期的演示数据文件
   * 每分钟（延迟30秒）自动清理，始终保留最新5个文件
+  * 每分钟（延迟45秒）自动运行 ETL 主程序，导出结果 Excel
 常用运维命令
 
 # 查看服务运行状态
 
 ```text
-sudo systemctl status etl\_auto\_main
+sudo systemctl status etl\\\_auto\\\_main
 ```
 
 # 查看实时运行日志
 
 ```text
-journalctl -u etl\_auto\_main -f
+journalctl -u etl\\\_auto\\\_main -f
 ```
 
 # 实时查看数据生成日志
@@ -151,16 +152,24 @@ tail -f logs/gen.log
 tail -f logs/cleanup.log
 ```
 
+# 实时查看 ETL 自动运行日志
+
+```text
+
+tail -f logs/main\_cron.log
+
+```
+
 # 重启 ETL 服务
 
 ```text
-sudo systemctl restart etl\_auto\_main
+sudo systemctl restart etl\\\_auto\\\_main
 ```
 
 # 停止 ETL 服务
 
 ```text
-sudo systemctl stop etl\_auto\_main
+sudo systemctl stop etl\\\_auto\\\_main
 ```
 
 🧪 核心数据清洗逻辑
@@ -178,9 +187,10 @@ sudo systemctl stop etl\_auto\_main
 📊 进度展示与日志体系
 
 * 终端实时进度：手动运行脚本时，彩色动态进度条实时刷新处理行数与百分比，无刷屏干扰
-* 任务运行日志：`logs/main\_run.log` 记录 ETL 任务的完整执行过程及错误信息。
+* 任务运行日志：`logs/main\\\_run.log` 记录 ETL 任务的完整执行过程及错误信息。
 * 数据生成日志：`logs/gen.log` 每分钟记录一次生成完成信息。
 * 数据清理日志：`logs/cleanup.log` 记录每次清理的删除明细。
+* ETL 自动运行日志：`logs/main\_cron.log` 记录每分钟自动执行的 ETL 处理结果。
 * 部署历史日志：`logs/etl\_deploy\_update.log` 记录每次部署的完整过程。
 * 系统服务日志：通过 `journalctl -u etl\_auto\_main` 查看服务启停、崩溃及自动重启记录。
 📦 核心依赖项
