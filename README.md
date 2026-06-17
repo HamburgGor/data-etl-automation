@@ -45,37 +45,55 @@ data-etl-automation/
 - pip 包管理工具
 2. 安装项目依赖
 # 创建虚拟环境
+```text
 python -m venv Myvenv
-
+```
 # 激活虚拟环境
 # Linux / MacOS
+```text
 source Myvenv/bin/activate
+```
 # Windows
+```text
 Myvenv\Scripts\activate
+```
 
 # 安装全部依赖
+```text
 pip install -r requirements.txt
+```
 3. 生成测试数据
-# 生成50万行超大脏数据（用于压力测试）
+# 生成50万行超大脏数据（用于演示）
+```text
 python gen_test_data.py
+```
 
 # 生成日常演示用带日期戳数据
+```text
 python gen_daily_data.py
+```
 4. 执行 ETL 数据处理
 # 自定义输入输出路径运行
+```text
 python main.py --input demo_data/large_input.csv --output output/result.xlsx
-
+```
 # 使用默认配置快速运行
+```text
 python main.py
+```
 🖥️ Ubuntu 服务器正式部署
 支持一键自动化部署，全程无需手动配置环境、服务与定时任务，部署后永久后台常驻。
 # 1. 克隆项目至服务器指定目录
-git clone <your-repo-url> ~/data-etl-automation
+```text
+git clone https://github.com/HamburgGor/data-etl-automation.git
 cd ~/data-etl-automation
+```
 
 # 2. 赋予运维脚本执行权限并启动部署
+```text
 chmod +x scripts/*.sh
 sudo ./scripts/deploy.sh
+```
 部署自动完成以下配置
 - 自动安装 Python3、pip、venv 基础环境
 - 创建独立隔离虚拟环境 ~/Myvenv
@@ -87,16 +105,21 @@ sudo ./scripts/deploy.sh
   - 每2分钟自动清理5天以上过期数据文件
 常用运维命令
 # 查看服务运行状态
+```text
 sudo systemctl status etl_auto_main
-
+```
 # 查看实时运行日志
+```text
 journalctl -u etl_auto_main -f
-
+```
 # 重启 ETL 服务
+```text
 sudo systemctl restart etl_auto_main
-
+```
 # 停止 ETL 服务
+```text
 sudo systemctl stop etl_auto_main
+```
 🧪 核心数据清洗逻辑
 内置标准化清洗规则，适配绝大多数业务脏数据场景，规则可自定义拓展。
 清洗步骤
@@ -115,7 +138,9 @@ sudo systemctl stop etl_auto_main
 - 系统服务日志：通过 journalctl -u etl_auto_main 查看服务启停、异常崩溃、自动重启记录
 📦 核心依赖项
 所有依赖版本可兼容主流服务器环境，详细版本约束见 requirements.txt
+```text
 - pandas ≥ 1.3.0
 - openpyxl ≥ 3.0.0
+```
 📄 开源许可
 本项目基于 MIT License 开源，可自由使用、修改与二次分发。
