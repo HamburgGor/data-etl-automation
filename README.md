@@ -34,6 +34,7 @@ data-etl-automation/
 │   └── batch_task.py       # ETL 批处理核心流程
 ├── scripts/                # 部署与运维脚本
 │   ├── deploy.sh           # 服务器一键部署脚本
+│   ├── uninstall.sh         # 一键卸载脚本
 │   └── cleanup_old.sh      # 过期数据定时清理脚本
 └── tests/                  # 测试用例目录（预留）
     └── __init__.py
@@ -54,8 +55,6 @@ python -m venv Myvenv
 ```
 
 # 激活虚拟环境
-
-# Linux / MacOS
 
 ```text
 source Myvenv/bin/activate
@@ -165,6 +164,12 @@ sudo systemctl restart etl_auto_main
 
 ```text
 sudo systemctl stop etl_auto_main
+```
+
+# 一键卸载所有服务与任务
+
+```text
+sudo ./scripts/uninstall.sh
 ```
 
 🧪 核心数据清洗逻辑
