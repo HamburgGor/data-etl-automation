@@ -23,20 +23,20 @@ data-etl-automation/
 ├── README.md               # 项目说明文档
 ├── requirements.txt        # Python 依赖清单
 ├── main.py                 # ETL 程序主入口
-├── gen\\\_test\\\_data.py        # 生成 50 万行测试脏数据（支持定时生成日期文件）
+├── gen_test_data.py        # 生成 50 万行测试脏数据（支持定时生成日期文件）
 ├── core/                   # 公共工具底层（通用能力封装）
-│   ├── \\\_\\\_init\\\_\\\_.py
-│   ├── color\\\_print.py      # ANSI 彩色日志 + 可视化进度条
-│   ├── data\\\_cleaner.py     # 核心数据清洗工具类与方法
-│   └── stable\\\_retry.py     # 任务重试装饰器（容错机制）
+│   ├── __init__.py
+│   ├── color_print.py      # ANSI 彩色日志 + 可视化进度条
+│   ├── data_cleaner.py     # 核心数据清洗工具类与方法
+│   └── stable_retry.py     # 任务重试装饰器（容错机制）
 ├── tasks/                  # 业务逻辑层
-│   ├── \\\_\\\_init\\\_\\\_.py
-│   └── batch\\\_task.py       # ETL 批处理核心流程
+│   ├── __init__.py
+│   └── batch_task.py       # ETL 批处理核心流程
 ├── scripts/                # 部署与运维脚本
 │   ├── deploy.sh           # 服务器一键部署脚本
-│   └── cleanup\\\_old.sh      # 过期数据定时清理脚本
+│   └── cleanup_old.sh      # 过期数据定时清理脚本
 └── tests/                  # 测试用例目录（预留）
-    └── \\\_\\\_init\\\_\\\_.py
+    └── __init__.py
 ```
 
 自动生成目录：项目运行后将自动创建 demo\_data/（测试数据）、output/（处理结果）、logs/（运行日志），无需手动新建。
@@ -61,12 +61,6 @@ python -m venv Myvenv
 source Myvenv/bin/activate
 ```
 
-# Windows
-
-```text
-Myvenv\\\\Scripts\\\\activate
-```
-
 # 安装全部依赖
 
 ```text
@@ -78,7 +72,7 @@ pip install -r requirements.txt
 # 生成50万行超大脏数据（用于演示）
 
 ```text
-python gen\\\_test\\\_data.py
+python gen_test_data.py
 ```
 
 4. 执行 ETL 数据处理
@@ -86,7 +80,7 @@ python gen\\\_test\\\_data.py
 # 自定义输入输出路径运行
 
 ```text
-python main.py --input demo\\\_data/large\\\_input.csv --output output/result.xlsx
+python main.py --input demo_data/large_input.csv --output output/result.xlsx
 ```
 
 # 使用默认配置快速运行
@@ -101,14 +95,15 @@ python main.py
 # 1\. 克隆项目至服务器指定目录
 
 ```text
+cd ~
 git clone https://github.com/HamburgGor/data-etl-automation.git
-cd \\\~/data-etl-automation
+cd data-etl-automation
 ```
 
 # 2\. 赋予运维脚本执行权限并启动部署
 
 ```text
-chmod +x scripts/\\\*.sh
+chmod +x scripts/*.sh
 sudo ./scripts/deploy.sh
 ```
 
@@ -129,13 +124,13 @@ sudo ./scripts/deploy.sh
 # 查看服务运行状态
 
 ```text
-sudo systemctl status etl\\\_auto\\\_main
+sudo systemctl status etl_auto_main
 ```
 
 # 查看实时运行日志
 
 ```text
-journalctl -u etl\\\_auto\\\_main -f
+journalctl -u etl_auto_main -f
 ```
 
 # 实时查看数据生成日志
@@ -156,43 +151,39 @@ tail -f logs/cleanup.log
 
 ```text
 
-tail -f logs/main\_cron.log
+tail -f logs/main_cron.log
 
 ```
 
 # 重启 ETL 服务
 
 ```text
-sudo systemctl restart etl\\\_auto\\\_main
+sudo systemctl restart etl_auto_main
 ```
 
 # 停止 ETL 服务
 
 ```text
-sudo systemctl stop etl\\\_auto\\\_main
+sudo systemctl stop etl_auto_main
 ```
 
 🧪 核心数据清洗逻辑
 内置标准化清洗规则，适配绝大多数业务脏数据场景，规则可自定义拓展。
-清洗步骤
-详细处理说明
-删除全空行
-批量移除所有字段均为空的无效数据行，精简数据集
-数据去重
-保留首次出现的数据行，彻底删除完全重复的冗余行，保证数据唯一性
-异常金额处理
-识别 amount 字段负数数据，自动转为 NaN 标记为异常数据，便于后续筛选核查
-文本标准化清理
-清除文本首尾多余空格、不可见特殊字符、乱码字符，统一文本格式
+| 清洗步骤 | 详细处理说明 |
+|----------|--------------|
+| 删除全空行 | 批量移除所有字段均为空的无效数据行，精简数据集 |
+| 数据去重 | 保留首次出现的数据行，删除完全重复的冗余行，保证数据唯一性 |
+| 异常金额处理 | 识别 `amount` 字段中的负数，自动转为 `NaN` 标记为异常 |
+| 文本标准化清理 | 清除文本首尾空格、不可见字符及乱码，统一文本格式 |
 📊 进度展示与日志体系
 
 * 终端实时进度：手动运行脚本时，彩色动态进度条实时刷新处理行数与百分比，无刷屏干扰
-* 任务运行日志：`logs/main\\\_run.log` 记录 ETL 任务的完整执行过程及错误信息。
-* 数据生成日志：`logs/gen.log` 每分钟记录一次生成完成信息。
-* 数据清理日志：`logs/cleanup.log` 记录每次清理的删除明细。
-* ETL 自动运行日志：`logs/main\_cron.log` 记录每分钟自动执行的 ETL 处理结果。
-* 部署历史日志：`logs/etl\_deploy\_update.log` 记录每次部署的完整过程。
-* 系统服务日志：通过 `journalctl -u etl\_auto\_main` 查看服务启停、崩溃及自动重启记录。
+* 任务运行日志：logs/main_run.log 记录 ETL 任务的完整执行过程及错误信息。
+* 数据生成日志：logs/gen.log 每分钟记录一次生成完成信息。
+* 数据清理日志：logs/cleanup.log 记录每次清理的删除明细。
+* ETL 自动运行日志：logs/main_cron.log 记录每分钟自动执行的 ETL 处理结果。
+* 部署历史日志：logs/etl_deploy_update.log 记录每次部署的完整过程。
+* 系统服务日志：通过 journalctl -u etl_auto_main 查看服务启停、崩溃及自动重启记录。
 📦 核心依赖项
 所有依赖版本可兼容主流服务器环境，详细版本约束见 requirements.txt
 
