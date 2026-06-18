@@ -135,9 +135,7 @@ journalctl -u etl_auto_main -f
 # 实时查看数据生成日志
 
 ```text
-
 tail -f logs/gen.log
-
 ```
 
 # 实时查看自动清理日志
@@ -149,9 +147,7 @@ tail -f logs/cleanup.log
 # 实时查看 ETL 自动运行日志
 
 ```text
-
 tail -f logs/main_cron.log
-
 ```
 
 # 重启 ETL 服务
