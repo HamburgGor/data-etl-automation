@@ -191,6 +191,7 @@ sudo ./scripts/uninstall.sh
 * 系统服务日志：通过 journalctl -u etl_auto_main 查看服务启停、崩溃及自动重启记录。
 
 📦 核心依赖项
+
 所有依赖版本可兼容主流服务器环境，详细版本约束见 requirements.txt
 
 ```text
