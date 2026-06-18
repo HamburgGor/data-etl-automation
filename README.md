@@ -189,6 +189,7 @@ sudo ./scripts/uninstall.sh
 * ETL 自动运行日志：logs/main_cron.log 记录每分钟自动执行的 ETL 处理结果。
 * 部署历史日志：logs/etl_deploy_update.log 记录每次部署的完整过程。
 * 系统服务日志：通过 journalctl -u etl_auto_main 查看服务启停、崩溃及自动重启记录。
+
 📦 核心依赖项
 所有依赖版本可兼容主流服务器环境，详细版本约束见 requirements.txt
 
